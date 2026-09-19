@@ -23,6 +23,7 @@ export interface FacilityData {
   lossSenior: bigint;
   defaultReason: string;
   defaultedAt: bigint;
+  lateSince: bigint;
 }
 
 export function useFacility(id: number) {
@@ -34,6 +35,7 @@ export function useFacility(id: number) {
       { ...anoraPoolContract, functionName: "lossesOf", args: [BigInt(id)] },
       { ...anoraPoolContract, functionName: "defaultReasonOf", args: [BigInt(id)] },
       { ...anoraPoolContract, functionName: "defaultedAtOf", args: [BigInt(id)] },
+      { ...anoraPoolContract, functionName: "lateSinceOf", args: [BigInt(id)] },
     ],
     query: { refetchInterval: REFETCH_MS },
   });
@@ -59,6 +61,7 @@ export function useFacility(id: number) {
       lossSenior: losses[2],
       defaultReason: data[4].result as string,
       defaultedAt: data[5].result as bigint,
+      lateSince: data[6].result as bigint,
     };
   }
 

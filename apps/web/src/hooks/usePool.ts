@@ -1,5 +1,5 @@
 import { useReadContract, useReadContracts } from "wagmi";
-import { anoraPoolContract, riskAgentAddress, testUsdcContract } from "../config/contracts";
+import { anoraPoolContract, testUsdcContract } from "../config/contracts";
 
 const REFETCH_MS = 5_000;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
@@ -48,9 +48,18 @@ export function usePolicy() {
   });
 }
 
+export function useRiskAgent() {
+  return useReadContract({
+    ...anoraPoolContract,
+    functionName: "riskAgent",
+    query: { refetchInterval: REFETCH_MS },
+  });
+}
+
 export function useIsRiskAgent(address: `0x${string}` | undefined) {
-  if (!address) return false;
-  return address.toLowerCase() === riskAgentAddress.toLowerCase();
+  const { data: riskAgent } = useRiskAgent();
+  if (!address || !riskAgent) return false;
+  return address.toLowerCase() === riskAgent.toLowerCase();
 }
 
 export function useNextFacilityId() {

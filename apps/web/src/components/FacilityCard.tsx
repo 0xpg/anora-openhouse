@@ -6,7 +6,6 @@ import { formatDuration, formatUsdc, parseUsdc } from "../lib/format";
 import { absorbLoss, distributeRecovery } from "../lib/waterfall";
 import { useContractAction } from "../hooks/useContractAction";
 import { useFacility } from "../hooks/useFacility";
-import { useLateAccruedAt } from "../hooks/useLateAccruedAt";
 import { useNow } from "../hooks/useNow";
 import { PoolBoard, useIsRiskAgent, useUsdcAllowance } from "../hooks/usePool";
 
@@ -49,8 +48,6 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
   const recoveryApprove = useContractAction();
   const recordRecovery = useContractAction();
 
-  const isLate = facility?.statusName === "Late";
-  const { data: lateAccruedAt } = useLateAccruedAt(id, isLate);
 
   if (isLoading || !facility) return <div className="card">Loading facility #{id}...</div>;
 
@@ -72,9 +69,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
   const repayNeedsApproval = repayAmountUnits > 0n && (allowance ?? 0n) < repayAmountUnits;
   const canMarkLate = facility.statusName === "Open" && facility.principal > 0n && dueInSec < 0;
 
-  const graceDeadline = lateAccruedAt !== undefined ? lateAccruedAt + facility.grace : undefined;
-  const graceElapsed = graceDeadline !== undefined ? nowSec >= graceDeadline : undefined;
-  const canDeclareDefault = isRiskAgent && facility.statusName === "Late" && graceElapsed !== false;
+  const graceDeadline = facility.lateSince + facility.grace;
+  const graceElapsed = nowSec >= graceDeadline;
+  const canDeclareDefault = isRiskAgent && facility.statusName === "Late" && graceElapsed;
 
   const canRecover =
     facility.statusName === "Defaulted" &&
@@ -135,11 +132,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
 
       {facility.statusName === "Late" && (
         <p className="muted">
-          {graceDeadline === undefined
-            ? "Grace deadline unknown (no MarkedLate event found in the recent block window); the contract will still enforce it."
-            : graceElapsed
-              ? "Grace period elapsed. Ready for declareDefault."
-              : `Grace elapsed in ${formatDuration(Number(graceDeadline - nowSec))}.`}
+          {graceElapsed
+            ? "Grace period elapsed. Ready for declareDefault."
+            : `Grace elapsed in ${formatDuration(Number(graceDeadline - nowSec))}.`}
         </p>
       )}
 
