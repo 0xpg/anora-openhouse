@@ -218,4 +218,84 @@ contract AnoraPoolTest is Test {
         assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Closed));
         assertEq(pool.seniorAssets() + pool.juniorAssets(), 396_000 * USDC);
     }
+
+    function _late(uint256 graceDays) internal returns (uint256 id) {
+        id = _drawn();
+        vm.warp(block.timestamp + 90 days + 1);
+        pool.markLate(id);
+        vm.warp(block.timestamp + graceDays * 1 days);
+    }
+
+    function test_defaultOnlyByRiskAgent() public {
+        uint256 id = _late(30);
+
+        vm.prank(originator);
+        vm.expectRevert(AnoraPool.NotRiskAgent.selector);
+        pool.declareDefault(id, "buyer insolvent");
+    }
+
+    function test_defaultNeedsGracePeriodElapsed() public {
+        uint256 id = _late(29);
+
+        vm.prank(riskAgent);
+        vm.expectRevert(AnoraPool.GraceNotElapsed.selector);
+        pool.declareDefault(id, "buyer insolvent");
+    }
+
+    function test_defaultRecordsReasonAndConsumesFirstLossThenJuniorThenSenior() public {
+        uint256 id = _late(30);
+
+        vm.prank(riskAgent);
+        pool.declareDefault(id, "buyer insolvent, invoice disputed");
+
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Defaulted));
+        assertEq(pool.defaultReasonOf(id), "buyer insolvent, invoice disputed");
+        assertEq(pool.defaultedAtOf(id), block.timestamp);
+        assertEq(pool.firstLossReserve(), 0);
+        assertEq(pool.juniorAssets(), 0);
+        assertEq(pool.seniorAssets(), 220_000 * USDC);
+        assertEq(pool.owedOf(id), 0);
+        (uint256 lossFirst, uint256 lossJunior, uint256 lossSenior) = pool.lossesOf(id);
+        assertEq(lossFirst, 30_000 * USDC);
+        assertEq(lossJunior, 120_000 * USDC);
+        assertEq(lossSenior, 50_000 * USDC);
+    }
+
+    function test_smallDefaultStopsAtFirstLoss() public {
+        _seedPool();
+        uint256 id = _openFacility();
+        vm.prank(originator);
+        pool.drawdown(id, 20_000 * USDC);
+        vm.warp(block.timestamp + 90 days + 1);
+        pool.markLate(id);
+        vm.warp(block.timestamp + 30 days);
+
+        vm.prank(riskAgent);
+        pool.declareDefault(id, "late beyond grace");
+
+        assertEq(pool.firstLossReserve(), 10_000 * USDC);
+        assertEq(pool.juniorAssets(), 120_000 * USDC);
+        assertEq(pool.seniorAssets(), 270_000 * USDC);
+    }
+
+    function test_recoveryRestoresSeniorThenJuniorThenFirstLoss() public {
+        uint256 id = _late(30);
+        vm.prank(riskAgent);
+        pool.declareDefault(id, "buyer insolvent");
+        uint256 before = usdc.balanceOf(originator);
+
+        vm.prank(originator);
+        pool.recordRecovery(id, 60_000 * USDC);
+        assertEq(pool.seniorAssets(), 270_000 * USDC);
+        assertEq(pool.juniorAssets(), 10_000 * USDC);
+
+        vm.prank(originator);
+        pool.recordRecovery(id, 140_000 * USDC);
+        assertEq(pool.juniorAssets(), 120_000 * USDC);
+        assertEq(usdc.balanceOf(originator), before - 200_000 * USDC + 30_000 * USDC);
+
+        vm.prank(originator);
+        vm.expectRevert(AnoraPool.NothingToRecover.selector);
+        pool.recordRecovery(id, 1 * USDC);
+    }
 }

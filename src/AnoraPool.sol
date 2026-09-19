@@ -35,6 +35,11 @@ contract AnoraPool {
         uint256 dueAt;
         uint256 lateAccruedAt;
         Status status;
+        uint256 defaultedAt;
+        string defaultReason;
+        uint256 lossFirstLoss;
+        uint256 lossJunior;
+        uint256 lossSenior;
     }
 
     error SeniorCapacityExceeded();
@@ -45,6 +50,10 @@ contract AnoraPool {
     error FacilityNotOpen();
     error NotPastDue();
     error Overpayment();
+    error NotRiskAgent();
+    error FacilityNotLate();
+    error GraceNotElapsed();
+    error NothingToRecover();
 
     uint256 public constant BPS = 10_000;
 
@@ -69,6 +78,10 @@ contract AnoraPool {
     event Repaid(uint256 indexed id, uint256 principal, uint256 fee);
     event MarkedLate(uint256 indexed id, uint256 dueAt, uint256 at);
     event FacilityClosed(uint256 indexed id);
+    event DefaultDeclared(
+        uint256 indexed id, string reason, uint256 lossFirstLoss, uint256 lossJunior, uint256 lossSenior
+    );
+    event Recovered(uint256 indexed id, uint256 amount, uint256 toSenior, uint256 toJunior, uint256 toOriginator);
 
     constructor(address asset_, address riskAgent_, Policy memory policy_) {
         asset = IERC20(asset_);
@@ -96,6 +109,19 @@ contract AnoraPool {
 
     function statusOf(uint256 id) external view returns (Status) {
         return _facilities[id].status;
+    }
+
+    function defaultReasonOf(uint256 id) external view returns (string memory) {
+        return _facilities[id].defaultReason;
+    }
+
+    function defaultedAtOf(uint256 id) external view returns (uint256) {
+        return _facilities[id].defaultedAt;
+    }
+
+    function lossesOf(uint256 id) external view returns (uint256, uint256, uint256) {
+        Facility storage f = _facilities[id];
+        return (f.lossFirstLoss, f.lossJunior, f.lossSenior);
     }
 
     function dueAtOf(uint256 id) external view returns (uint256) {
@@ -181,6 +207,58 @@ contract AnoraPool {
         f.status = Status.Late;
         f.lateAccruedAt = block.timestamp;
         emit MarkedLate(id, f.dueAt, block.timestamp);
+    }
+
+    function declareDefault(uint256 id, string calldata reason) external {
+        if (msg.sender != riskAgent) revert NotRiskAgent();
+        Facility storage f = _facilities[id];
+        if (f.status != Status.Late) revert FacilityNotLate();
+        if (block.timestamp < f.lateAccruedAt + f.grace) revert GraceNotElapsed();
+        uint256 loss = f.principal;
+        f.principal = 0;
+        f.fee = 0;
+        f.status = Status.Defaulted;
+        f.defaultedAt = block.timestamp;
+        f.defaultReason = reason;
+
+        uint256 fromFirst = loss < f.firstLoss ? loss : f.firstLoss;
+        f.firstLoss -= fromFirst;
+        firstLossReserve -= fromFirst;
+        loss -= fromFirst;
+
+        uint256 fromJunior = loss < juniorAssets ? loss : juniorAssets;
+        juniorAssets -= fromJunior;
+        loss -= fromJunior;
+
+        uint256 fromSenior = loss < seniorAssets ? loss : seniorAssets;
+        seniorAssets -= fromSenior;
+
+        f.lossFirstLoss = fromFirst;
+        f.lossJunior = fromJunior;
+        f.lossSenior = fromSenior;
+        emit DefaultDeclared(id, reason, fromFirst, fromJunior, fromSenior);
+    }
+
+    function recordRecovery(uint256 id, uint256 amount) external {
+        Facility storage f = _facilities[id];
+        if (f.status != Status.Defaulted) revert NothingToRecover();
+        uint256 outstanding = f.lossSenior + f.lossJunior + f.lossFirstLoss;
+        if (outstanding == 0 || amount > outstanding) revert NothingToRecover();
+        asset.transferFrom(msg.sender, address(this), amount);
+
+        uint256 toSenior = amount < f.lossSenior ? amount : f.lossSenior;
+        f.lossSenior -= toSenior;
+        seniorAssets += toSenior;
+        uint256 rest = amount - toSenior;
+
+        uint256 toJunior = rest < f.lossJunior ? rest : f.lossJunior;
+        f.lossJunior -= toJunior;
+        juniorAssets += toJunior;
+        rest -= toJunior;
+
+        f.lossFirstLoss -= rest;
+        if (rest > 0) asset.transfer(f.originator, rest);
+        emit Recovered(id, amount, toSenior, toJunior, rest);
     }
 
     function _pendingLateFee(Facility storage f) internal view returns (uint256) {
