@@ -142,4 +142,80 @@ contract AnoraPoolTest is Test {
         vm.expectRevert(AnoraPool.NotOriginator.selector);
         pool.drawdown(id, 1 * USDC);
     }
+
+    function _drawn() internal returns (uint256 id) {
+        _seedPool();
+        id = _openFacility();
+        vm.prank(originator);
+        pool.drawdown(id, 200_000 * USDC);
+    }
+
+    function test_repayPaysPrincipalBeforeFee() public {
+        uint256 id = _drawn();
+
+        vm.prank(originator);
+        pool.repay(id, 100_000 * USDC);
+
+        assertEq(pool.principalOf(id), 100_000 * USDC);
+        assertEq(pool.owedOf(id), 104_000 * USDC);
+        assertEq(pool.seniorAssets(), 270_000 * USDC);
+    }
+
+    function test_fullRepaySplitsFeeAndClosesFacility() public {
+        uint256 id = _drawn();
+        uint256 before = usdc.balanceOf(originator);
+
+        vm.prank(originator);
+        pool.repay(id, 204_000 * USDC);
+
+        assertEq(pool.owedOf(id), 0);
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Closed));
+        assertEq(pool.seniorAssets(), 272_400 * USDC);
+        assertEq(pool.juniorAssets(), 121_600 * USDC);
+        assertEq(pool.firstLossReserve(), 0);
+        assertEq(usdc.balanceOf(originator), before - 204_000 * USDC + 30_000 * USDC);
+    }
+
+    function test_markLateNeedsPastDue() public {
+        uint256 id = _drawn();
+
+        vm.expectRevert(AnoraPool.NotPastDue.selector);
+        pool.markLate(id);
+    }
+
+    function test_lateFacilityPausesDrawdown() public {
+        uint256 id = _drawn();
+        vm.warp(block.timestamp + 90 days + 1);
+
+        pool.markLate(id);
+
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Late));
+        vm.prank(originator);
+        vm.expectRevert(AnoraPool.FacilityNotOpen.selector);
+        pool.drawdown(id, 1 * USDC);
+    }
+
+    function test_lateFeeAccruesPerDay() public {
+        uint256 id = _drawn();
+        vm.warp(block.timestamp + 90 days + 1);
+        pool.markLate(id);
+
+        vm.warp(block.timestamp + 10 days);
+
+        assertEq(pool.owedOf(id), 206_000 * USDC);
+    }
+
+    function test_repayWhileLateClearsWithLateFee() public {
+        uint256 id = _drawn();
+        vm.warp(block.timestamp + 90 days + 1);
+        pool.markLate(id);
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(originator);
+        pool.repay(id, 206_000 * USDC);
+
+        assertEq(pool.owedOf(id), 0);
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Closed));
+        assertEq(pool.seniorAssets() + pool.juniorAssets(), 396_000 * USDC);
+    }
 }

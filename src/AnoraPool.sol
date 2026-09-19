@@ -33,6 +33,7 @@ contract AnoraPool {
         uint256 tenor;
         uint256 grace;
         uint256 dueAt;
+        uint256 lateAccruedAt;
         Status status;
     }
 
@@ -42,6 +43,8 @@ contract AnoraPool {
     error InsufficientLiquidity();
     error NotOriginator();
     error FacilityNotOpen();
+    error NotPastDue();
+    error Overpayment();
 
     uint256 public constant BPS = 10_000;
 
@@ -63,6 +66,9 @@ contract AnoraPool {
     event Deposited(address indexed provider, Tranche tranche, uint256 assets, uint256 shares);
     event FacilityOpened(uint256 indexed id, address indexed originator, uint256 limit, uint256 firstLoss);
     event Drawn(uint256 indexed id, uint256 amount, uint256 fee, uint256 dueAt);
+    event Repaid(uint256 indexed id, uint256 principal, uint256 fee);
+    event MarkedLate(uint256 indexed id, uint256 dueAt, uint256 at);
+    event FacilityClosed(uint256 indexed id);
 
     constructor(address asset_, address riskAgent_, Policy memory policy_) {
         asset = IERC20(asset_);
@@ -85,7 +91,11 @@ contract AnoraPool {
 
     function owedOf(uint256 id) public view returns (uint256) {
         Facility storage f = _facilities[id];
-        return f.principal + f.fee;
+        return f.principal + f.fee + _pendingLateFee(f);
+    }
+
+    function statusOf(uint256 id) external view returns (Status) {
+        return _facilities[id].status;
     }
 
     function dueAtOf(uint256 id) external view returns (uint256) {
@@ -148,6 +158,58 @@ contract AnoraPool {
         f.fee += fee;
         asset.transfer(msg.sender, amount);
         emit Drawn(id, amount, fee, f.dueAt);
+    }
+
+    function repay(uint256 id, uint256 amount) external {
+        Facility storage f = _facilities[id];
+        _accrueLateFee(f);
+        if (amount > f.principal + f.fee) revert Overpayment();
+        uint256 toPrincipal = amount < f.principal ? amount : f.principal;
+        uint256 toFee = amount - toPrincipal;
+        f.principal -= toPrincipal;
+        f.fee -= toFee;
+        asset.transferFrom(msg.sender, address(this), amount);
+        _distributeFee(toFee);
+        emit Repaid(id, toPrincipal, toFee);
+        if (f.principal == 0 && f.fee == 0) _close(id, f);
+    }
+
+    function markLate(uint256 id) external {
+        Facility storage f = _facilities[id];
+        if (f.status != Status.Open) revert FacilityNotOpen();
+        if (f.principal == 0 || block.timestamp <= f.dueAt) revert NotPastDue();
+        f.status = Status.Late;
+        f.lateAccruedAt = block.timestamp;
+        emit MarkedLate(id, f.dueAt, block.timestamp);
+    }
+
+    function _pendingLateFee(Facility storage f) internal view returns (uint256) {
+        if (f.status != Status.Late) return 0;
+        uint256 daysLate = (block.timestamp - f.lateAccruedAt) / 1 days;
+        return f.principal * policy.lateFeePerDayBps * daysLate / BPS;
+    }
+
+    function _accrueLateFee(Facility storage f) internal {
+        uint256 pending = _pendingLateFee(f);
+        if (pending == 0) return;
+        f.fee += pending;
+        f.lateAccruedAt += ((block.timestamp - f.lateAccruedAt) / 1 days) * 1 days;
+    }
+
+    function _distributeFee(uint256 fee) internal {
+        if (fee == 0) return;
+        uint256 toSenior = fee * policy.seniorFeeShareBps / BPS;
+        seniorAssets += toSenior;
+        juniorAssets += fee - toSenior;
+    }
+
+    function _close(uint256 id, Facility storage f) internal {
+        f.status = Status.Closed;
+        uint256 refund = f.firstLoss;
+        f.firstLoss = 0;
+        firstLossReserve -= refund;
+        asset.transfer(f.originator, refund);
+        emit FacilityClosed(id);
     }
 
     function _toShares(uint256 amount, uint256 assets, uint256 totalShares) internal pure returns (uint256) {
