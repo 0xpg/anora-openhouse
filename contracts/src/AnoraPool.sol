@@ -33,6 +33,7 @@ contract AnoraPool {
         uint256 tenor;
         uint256 grace;
         uint256 dueAt;
+        uint256 lateSince;
         uint256 lateAccruedAt;
         Status status;
         uint256 defaultedAt;
@@ -59,7 +60,7 @@ contract AnoraPool {
     uint256 public constant BPS = 10_000;
 
     IERC20 public immutable asset;
-    address public immutable riskAgent;
+    address public riskAgent;
     Policy public policy;
 
     uint256 public seniorAssets;
@@ -73,6 +74,7 @@ contract AnoraPool {
     uint256 public nextFacilityId;
     mapping(uint256 => Facility) internal _facilities;
 
+    event RiskAgentChanged(address indexed previous, address indexed next);
     event Deposited(address indexed provider, Tranche tranche, uint256 assets, uint256 shares);
     event Withdrawn(address indexed provider, Tranche tranche, uint256 assets, uint256 shares);
     event FacilityOpened(uint256 indexed id, address indexed originator, uint256 limit, uint256 firstLoss);
@@ -111,6 +113,16 @@ contract AnoraPool {
 
     function statusOf(uint256 id) external view returns (Status) {
         return _facilities[id].status;
+    }
+
+    function lateSinceOf(uint256 id) external view returns (uint256) {
+        return _facilities[id].lateSince;
+    }
+
+    function setRiskAgent(address next) external {
+        if (msg.sender != riskAgent) revert NotRiskAgent();
+        emit RiskAgentChanged(riskAgent, next);
+        riskAgent = next;
     }
 
     function defaultReasonOf(uint256 id) external view returns (string memory) {
@@ -226,6 +238,7 @@ contract AnoraPool {
         if (f.status != Status.Open) revert FacilityNotOpen();
         if (f.principal == 0 || block.timestamp <= f.dueAt) revert NotPastDue();
         f.status = Status.Late;
+        f.lateSince = block.timestamp;
         f.lateAccruedAt = block.timestamp;
         emit MarkedLate(id, f.dueAt, block.timestamp);
     }
@@ -234,7 +247,7 @@ contract AnoraPool {
         if (msg.sender != riskAgent) revert NotRiskAgent();
         Facility storage f = _facilities[id];
         if (f.status != Status.Late) revert FacilityNotLate();
-        if (block.timestamp < f.lateAccruedAt + f.grace) revert GraceNotElapsed();
+        if (block.timestamp < f.lateSince + f.grace) revert GraceNotElapsed();
         uint256 loss = f.principal;
         f.principal = 0;
         f.fee = 0;

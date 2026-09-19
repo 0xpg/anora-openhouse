@@ -328,4 +328,45 @@ contract AnoraPoolTest is Test {
         pool.withdraw(AnoraPool.Tranche.Junior, 120_000 * USDC);
         assertEq(usdc.balanceOf(junior1), 1_000_000 * USDC + 1_600 * USDC);
     }
+
+    function test_lateSinceIsExposedAndFixedAtMarkLate() public {
+        uint256 id = _late(0);
+        uint256 markedAt = block.timestamp;
+        vm.warp(block.timestamp + 5 days);
+
+        vm.prank(originator);
+        pool.repay(id, 1_000 * USDC);
+
+        assertEq(pool.lateSinceOf(id), markedAt);
+    }
+
+    function test_graceMeasuredFromMarkLateEvenAfterPartialRepay() public {
+        uint256 id = _late(0);
+        vm.warp(block.timestamp + 20 days);
+        vm.prank(originator);
+        pool.repay(id, 1_000 * USDC);
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(riskAgent);
+        pool.declareDefault(id, "grace elapsed");
+
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Defaulted));
+    }
+
+    function test_riskAgentCanHandOver() public {
+        address next = makeAddr("nextAgent");
+
+        vm.prank(originator);
+        vm.expectRevert(AnoraPool.NotRiskAgent.selector);
+        pool.setRiskAgent(next);
+
+        vm.prank(riskAgent);
+        pool.setRiskAgent(next);
+        assertEq(pool.riskAgent(), next);
+
+        uint256 id = _late(30);
+        vm.prank(next);
+        pool.declareDefault(id, "by new agent");
+        assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Defaulted));
+    }
 }
