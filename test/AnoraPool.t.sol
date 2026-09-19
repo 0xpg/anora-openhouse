@@ -298,4 +298,34 @@ contract AnoraPoolTest is Test {
         vm.expectRevert(AnoraPool.NothingToRecover.selector);
         pool.recordRecovery(id, 1 * USDC);
     }
+
+    function test_withdrawProRataWithinLiquidity() public {
+        _seedPool();
+        uint256 id = _openFacility();
+        vm.prank(originator);
+        pool.drawdown(id, 300_000 * USDC);
+
+        vm.prank(senior1);
+        pool.withdraw(AnoraPool.Tranche.Senior, 90_000 * USDC);
+        assertEq(usdc.balanceOf(senior1), 1_000_000 * USDC - 180_000 * USDC);
+        assertEq(pool.seniorAssets(), 180_000 * USDC);
+
+        vm.prank(senior1);
+        vm.expectRevert(AnoraPool.InsufficientLiquidity.selector);
+        pool.withdraw(AnoraPool.Tranche.Senior, 1 * USDC);
+    }
+
+    function test_withdrawAfterFeeReturnsMoreThanDeposited() public {
+        uint256 id = _drawn();
+        vm.prank(originator);
+        pool.repay(id, 204_000 * USDC);
+
+        vm.prank(senior1);
+        pool.withdraw(AnoraPool.Tranche.Senior, 270_000 * USDC);
+        assertEq(usdc.balanceOf(senior1), 1_000_000 * USDC + 2_400 * USDC);
+
+        vm.prank(junior1);
+        pool.withdraw(AnoraPool.Tranche.Junior, 120_000 * USDC);
+        assertEq(usdc.balanceOf(junior1), 1_000_000 * USDC + 1_600 * USDC);
+    }
 }

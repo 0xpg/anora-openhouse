@@ -54,6 +54,7 @@ contract AnoraPool {
     error FacilityNotLate();
     error GraceNotElapsed();
     error NothingToRecover();
+    error InsufficientShares();
 
     uint256 public constant BPS = 10_000;
 
@@ -73,6 +74,7 @@ contract AnoraPool {
     mapping(uint256 => Facility) internal _facilities;
 
     event Deposited(address indexed provider, Tranche tranche, uint256 assets, uint256 shares);
+    event Withdrawn(address indexed provider, Tranche tranche, uint256 assets, uint256 shares);
     event FacilityOpened(uint256 indexed id, address indexed originator, uint256 limit, uint256 firstLoss);
     event Drawn(uint256 indexed id, uint256 amount, uint256 fee, uint256 dueAt);
     event Repaid(uint256 indexed id, uint256 principal, uint256 fee);
@@ -153,6 +155,25 @@ contract AnoraPool {
         }
         asset.transferFrom(msg.sender, address(this), amount);
         emit Deposited(msg.sender, tranche, amount, shares);
+    }
+
+    function withdraw(Tranche tranche, uint256 shares) external returns (uint256 amount) {
+        if (tranche == Tranche.Senior) {
+            if (shares > seniorShares[msg.sender]) revert InsufficientShares();
+            amount = shares * seniorAssets / seniorTotalShares;
+            seniorShares[msg.sender] -= shares;
+            seniorTotalShares -= shares;
+            seniorAssets -= amount;
+        } else {
+            if (shares > juniorShares[msg.sender]) revert InsufficientShares();
+            amount = shares * juniorAssets / juniorTotalShares;
+            juniorShares[msg.sender] -= shares;
+            juniorTotalShares -= shares;
+            juniorAssets -= amount;
+        }
+        if (amount > liquidity()) revert InsufficientLiquidity();
+        asset.transfer(msg.sender, amount);
+        emit Withdrawn(msg.sender, tranche, amount, shares);
     }
 
     function openFacility(uint256 limit, uint256 firstLoss, uint256 tenor, uint256 grace)
