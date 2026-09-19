@@ -27,3 +27,27 @@ packages/    shared code (coming)
 bun install
 bun run test:contracts
 ```
+
+## apps/web
+
+Vite + React + TypeScript + wagmi v2 + viem, talking directly to AnoraPool and
+TestUSDC on Arbitrum Sepolia through an injected wallet (MetaMask). Plain CSS,
+no UI framework.
+
+```
+bun run dev:web      # http://127.0.0.1:5173
+bun run build:web     # type-checks then builds apps/web/dist
+bun run test:web      # vitest: waterfall math + formatting helpers
+```
+
+ABIs are generated, not hand-written: `bun scripts/export-abi.ts` reads
+`contracts/out/{AnoraPool,TestUSDC}.sol/*.json` (run `forge build` in
+`contracts/` first) and writes `apps/web/src/abi/*.ts` as `as const` arrays.
+Re-run it whenever the contract's interface changes, and commit the output.
+
+**Tenor-in-minutes demo convention**: `AnoraPool.openFacility` takes `tenor`
+and `grace` in seconds, but Arbitrum Sepolia is a live network we cannot warp
+time on. The Originator form takes both in **minutes** and multiplies by 60
+before sending the transaction, so a demo facility can go from Open to
+markLate-eligible in a couple of minutes instead of days.
+
