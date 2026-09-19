@@ -1,0 +1,9 @@
+{
+  "arbitrumSepolia": {
+    "chainId": 421614,
+    "deployedAt": "2026-09-19",
+    "TestUSDC": "0xe092c9607d81D38FB392208D9bc9b6075e0199d2",
+    "AnoraPool": "0xb1dB9407C7D8A60F121193157928B31Ba3481E25",
+    "riskAgent": "0x07dF8cd6D20b71ba7F16309d2844B88d1043fFfB"
+  }
+}
