@@ -123,7 +123,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
           <div className="stat-value small">
             {facility.dueAt === 0n
               ? "not drawn yet"
-              : dueInSec >= 0
+              : facility.statusName === "Defaulted" || facility.statusName === "Closed"
+                ? facility.statusName.toLowerCase()
+                : dueInSec >= 0
                 ? `in ${formatDuration(dueInSec)}`
                 : `${formatDuration(-dueInSec)} past due`}
           </div>

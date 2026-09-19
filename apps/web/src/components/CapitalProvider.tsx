@@ -113,7 +113,7 @@ export function CapitalProvider() {
       <div className="form-block">
         <h3>Withdraw</h3>
         <p className="muted">
-          My shares: Senior {shares.seniorShares.toString()} · Junior {shares.juniorShares.toString()}
+          My shares: Senior {formatUsdc(shares.seniorShares)} · Junior {formatUsdc(shares.juniorShares)}
         </p>
         <div className="row">
           <select value={withdrawTranche} onChange={(e) => setWithdrawTranche(e.target.value as TrancheChoice)}>
@@ -122,19 +122,19 @@ export function CapitalProvider() {
           </select>
           <input
             type="text"
-            inputMode="numeric"
-            placeholder="Shares"
+            inputMode="decimal"
+            placeholder="Shares (1 share = 1 USDC deposited)"
             value={withdrawShares}
             onChange={(e) => setWithdrawShares(e.target.value)}
           />
           <button
             className="btn btn-primary"
-            disabled={withdraw.isPending || withdraw.isConfirming || !withdrawShares}
+            disabled={withdraw.isPending || withdraw.isConfirming || parseUsdc(withdrawShares) === 0n}
             onClick={() =>
               withdraw.writeContractAsync({
                 ...anoraPoolContract,
                 functionName: "withdraw",
-                args: [withdrawTranche === "Senior" ? 0 : 1, BigInt(withdrawShares || "0")],
+                args: [withdrawTranche === "Senior" ? 0 : 1, parseUsdc(withdrawShares)],
               })
             }
           >
