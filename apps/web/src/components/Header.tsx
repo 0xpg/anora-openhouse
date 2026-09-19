@@ -1,12 +1,13 @@
 import { arbitrumSepolia } from "wagmi/chains";
 import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { useIsRiskAgent } from "../hooks/usePool";
+import type { Page } from "../App";
 
 function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function Header() {
+export function Header({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { connect, connectors, isPending: isConnecting } = useConnect();
@@ -19,11 +20,14 @@ export function Header() {
 
   return (
     <header className="header">
-      <div className="header-brand">
-        <span className="brand-name">Anora</span>
-        <span className="brand-sub">Open House</span>
-      </div>
+      <span className="brand-name">Anora</span>
+      <nav className="primary-nav" aria-label="Primary navigation">
+        <button className={page === "markets" || page === "opportunity" ? "active" : ""} onClick={() => onNavigate("markets")}>Markets</button>
+        <button className={page === "portfolio" ? "active" : ""} onClick={() => onNavigate("portfolio")}>Portfolio</button>
+        <button className={page === "activity" ? "active" : ""} onClick={() => onNavigate("activity")}>Activity</button>
+      </nav>
       <div className="header-actions">
+        <button className="network-pill" type="button"><span>◉</span> Arbitrum Sepolia <span>⌄</span></button>
         {wrongNetwork && (
           <button
             className="btn btn-warn"
@@ -37,13 +41,11 @@ export function Header() {
           <div className="account-pill">
             {isRiskAgent && <span className="badge badge-risk">risk agent</span>}
             <span className="address">{shortenAddress(address)}</span>
-            <button className="btn btn-ghost" onClick={() => disconnect()}>
-              Disconnect
-            </button>
+            <button className="account-menu" aria-label="Disconnect wallet" onClick={() => disconnect()}>⌄</button>
           </div>
         ) : (
           <button
-            className="btn btn-primary"
+            className="connect-button"
             disabled={isConnecting || !injectedConnector}
             onClick={() => injectedConnector && connect({ connector: injectedConnector })}
           >
