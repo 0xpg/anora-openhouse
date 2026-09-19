@@ -30,6 +30,9 @@ bun run test:contracts
 
 ## apps/web
 
+Live demo build: https://openhouse.dimsky.xyz (redeploy with `bin/deploy-web.sh`).
+
+
 Vite + React + TypeScript + wagmi v2 + viem, talking directly to AnoraPool and
 TestUSDC on Arbitrum Sepolia through an injected wallet (MetaMask). Plain CSS,
 no UI framework.
