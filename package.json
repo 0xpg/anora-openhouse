@@ -1,0 +1,13 @@
+{
+  "name": "anora-openhouse",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun run test:contracts",
+    "test:contracts": "cd contracts && forge test",
+    "build:contracts": "cd contracts && forge build"
+  }
+}

@@ -10,7 +10,15 @@ first, and recoveries flow back through the waterfall, Senior first.
 Built for the Arbitrum Open House Singapore 2026 buildathon. Target chain:
 Arbitrum Sepolia.
 
+Monorepo, Bun workspaces.
+
 ```
-forge build
-forge test
+contracts/   Foundry: AnoraPool, tests, deploy script
+apps/        web and api (coming)
+packages/    shared code (coming)
+```
+
+```
+bun install
+bun run test:contracts
 ```
