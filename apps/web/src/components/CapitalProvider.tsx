@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useAccount } from "wagmi";
-import { anoraPoolContract, testUsdcContract } from "../config/contracts";
+import { assetContract, poolContract } from "../config/contracts";
+import { useDeployment } from "../hooks/useDeployment";
 import { formatUsdc, parseUsdc } from "../lib/format";
 import { describeContractError } from "../lib/errors";
 import { useContractAction } from "../hooks/useContractAction";
-import { useMyShares, useUsdcAllowance, useUsdcBalance } from "../hooks/usePool";
+import { useAssetAllowance, useAssetBalance, useMyShares } from "../hooks/usePool";
+import { TxLink } from "./TxLink";
 
 const MINT_AMOUNT = 100_000n * 10n ** 6n;
 const MAX_UINT256 = 2n ** 256n - 1n;
@@ -13,13 +15,14 @@ type TrancheChoice = "Senior" | "Junior";
 
 export function CapitalProvider() {
   const { address, isConnected } = useAccount();
+  const deployment = useDeployment();
   const [depositTranche, setDepositTranche] = useState<TrancheChoice>("Junior");
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawTranche, setWithdrawTranche] = useState<TrancheChoice>("Junior");
   const [withdrawShares, setWithdrawShares] = useState("");
 
-  const { data: usdcBalance } = useUsdcBalance(address);
-  const { data: allowance } = useUsdcAllowance(address);
+  const { data: assetBalance } = useAssetBalance(address);
+  const { data: allowance } = useAssetAllowance(address);
   const shares = useMyShares(address);
 
   const mint = useContractAction();
@@ -36,30 +39,48 @@ export function CapitalProvider() {
     );
   }
 
+  if (!deployment?.pool) return null;
+
+  const assetSymbol = deployment.assetSymbol;
+  const asset = assetContract(deployment.asset);
+  const pool = poolContract(deployment.pool);
   const depositAmountUnits = parseUsdc(depositAmount);
   const needsApproval = depositAmountUnits > 0n && (allowance ?? 0n) < depositAmountUnits;
 
   return (
     <section className="panel">
       <h2>Capital provider</h2>
-      <p className="muted">USDC balance: {usdcBalance !== undefined ? formatUsdc(usdcBalance) : "..."}</p>
+      <p className="muted">
+        {assetSymbol} balance: {assetBalance !== undefined ? formatUsdc(assetBalance) : "..."}
+      </p>
 
-      <div className="row">
-        <button
-          className="btn"
-          disabled={mint.isPending || mint.isConfirming}
-          onClick={() =>
-            mint.writeContractAsync({
-              ...testUsdcContract,
-              functionName: "mint",
-              args: [address, MINT_AMOUNT],
-            })
-          }
-        >
-          {mint.isPending || mint.isConfirming ? "Minting..." : "Get test USDC (100,000)"}
-        </button>
-        {mint.error && <span className="error">{describeContractError(mint.error)}</span>}
-      </div>
+      {deployment.faucet ? (
+        <div className="row">
+          <button
+            className="btn"
+            disabled={mint.isPending || mint.isConfirming}
+            onClick={() =>
+              mint.writeContractAsync({
+                ...asset,
+                functionName: "mint",
+                args: [address, MINT_AMOUNT],
+              })
+            }
+          >
+            {mint.isPending || mint.isConfirming ? "Minting..." : "Get test USDC (100,000)"}
+          </button>
+          {mint.error && <span className="error">{describeContractError(mint.error)}</span>}
+          <TxLink hash={mint.hash} />
+        </div>
+      ) : (
+        <p className="muted">
+          Get {assetSymbol} on Robinhood Chain:{" "}
+          <a href="https://docs.robinhood.com/chain/bridging" target="_blank" rel="noreferrer">
+            bridging docs
+          </a>
+          .
+        </p>
+      )}
 
       <div className="form-block">
         <h3>Deposit</h3>
@@ -71,7 +92,7 @@ export function CapitalProvider() {
           <input
             type="text"
             inputMode="decimal"
-            placeholder="Amount USDC"
+            placeholder={`Amount ${assetSymbol}`}
             value={depositAmount}
             onChange={(e) => setDepositAmount(e.target.value)}
           />
@@ -81,9 +102,9 @@ export function CapitalProvider() {
               disabled={approve.isPending || approve.isConfirming}
               onClick={() =>
                 approve.writeContractAsync({
-                  ...testUsdcContract,
+                  ...asset,
                   functionName: "approve",
-                  args: [anoraPoolContract.address, MAX_UINT256],
+                  args: [pool.address, MAX_UINT256],
                 })
               }
             >
@@ -95,7 +116,7 @@ export function CapitalProvider() {
               disabled={deposit.isPending || deposit.isConfirming || depositAmountUnits === 0n}
               onClick={() =>
                 deposit.writeContractAsync({
-                  ...anoraPoolContract,
+                  ...pool,
                   functionName: "deposit",
                   args: [depositTranche === "Senior" ? 0 : 1, depositAmountUnits],
                 })
@@ -108,6 +129,7 @@ export function CapitalProvider() {
         {(approve.error || deposit.error) && (
           <span className="error">{describeContractError(approve.error ?? deposit.error)}</span>
         )}
+        <TxLink hash={deposit.hash} />
       </div>
 
       <div className="form-block">
@@ -123,7 +145,7 @@ export function CapitalProvider() {
           <input
             type="text"
             inputMode="decimal"
-            placeholder="Shares (1 share = 1 USDC deposited)"
+            placeholder={`Shares (1 share = 1 ${assetSymbol} deposited)`}
             value={withdrawShares}
             onChange={(e) => setWithdrawShares(e.target.value)}
           />
@@ -132,7 +154,7 @@ export function CapitalProvider() {
             disabled={withdraw.isPending || withdraw.isConfirming || parseUsdc(withdrawShares) === 0n}
             onClick={() =>
               withdraw.writeContractAsync({
-                ...anoraPoolContract,
+                ...pool,
                 functionName: "withdraw",
                 args: [withdrawTranche === "Senior" ? 0 : 1, parseUsdc(withdrawShares)],
               })
@@ -142,6 +164,7 @@ export function CapitalProvider() {
           </button>
         </div>
         {withdraw.error && <span className="error">{describeContractError(withdraw.error)}</span>}
+        <TxLink hash={withdraw.hash} />
       </div>
     </section>
   );

@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { useAccount } from "wagmi";
-import { anoraPoolContract, testUsdcContract } from "../config/contracts";
+import { assetContract, poolContract } from "../config/contracts";
+import { useDeployment } from "../hooks/useDeployment";
 import { describeContractError } from "../lib/errors";
 import { formatDuration, formatUsdc, parseUsdc } from "../lib/format";
 import { absorbLoss, distributeRecovery } from "../lib/waterfall";
 import { useContractAction } from "../hooks/useContractAction";
 import { useFacility } from "../hooks/useFacility";
 import { useNow } from "../hooks/useNow";
-import { PoolBoard, useIsRiskAgent, useUsdcAllowance } from "../hooks/usePool";
+import { PoolBoard, useAssetAllowance, useIsRiskAgent } from "../hooks/usePool";
+import { AddressLink } from "./AddressLink";
+import { TxLink } from "./TxLink";
 
 const MAX_UINT256 = 2n ** 256n - 1n;
-
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -30,9 +29,10 @@ function statusBadgeClass(status: string): string {
 
 export function FacilityCard({ id, board }: { id: number; board: PoolBoard | undefined }) {
   const { address } = useAccount();
+  const deployment = useDeployment();
   const { facility, isLoading } = useFacility(id);
   const isRiskAgent = useIsRiskAgent(address);
-  const { data: allowance } = useUsdcAllowance(address);
+  const { data: allowance } = useAssetAllowance(address);
   const now = useNow();
 
   const [drawAmount, setDrawAmount] = useState("");
@@ -48,8 +48,12 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
   const recoveryApprove = useContractAction();
   const recordRecovery = useContractAction();
 
-
   if (isLoading || !facility) return <div className="card">Loading facility #{id}...</div>;
+  if (!deployment?.pool) return null;
+
+  const assetSymbol = deployment.assetSymbol;
+  const asset = assetContract(deployment.asset);
+  const pool = poolContract(deployment.pool);
 
   const isOriginator = address && facility.originator.toLowerCase() === address.toLowerCase();
   const nowSec = BigInt(Math.floor(now / 1000));
@@ -100,7 +104,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
       <div className="stat-grid">
         <div className="stat">
           <div className="stat-label">Originator</div>
-          <div className="stat-value small">{shortenAddress(facility.originator)}</div>
+          <div className="stat-value small">
+            <AddressLink address={facility.originator} />
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">Limit</div>
@@ -178,7 +184,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
               disabled={!canDrawdown || drawdown.isPending || drawdown.isConfirming}
               onClick={() =>
                 drawdown.writeContractAsync({
-                  ...anoraPoolContract,
+                  ...pool,
                   functionName: "drawdown",
                   args: [BigInt(id), drawAmountUnits],
                 })
@@ -189,6 +195,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
           </div>
         )}
         {drawdown.error && <p className="error">{describeContractError(drawdown.error)}</p>}
+        <TxLink hash={drawdown.hash} />
 
         {(facility.statusName === "Open" || facility.statusName === "Late") && facility.owed > 0n && (
           <div className="row">
@@ -205,9 +212,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
                 disabled={repayApprove.isPending || repayApprove.isConfirming}
                 onClick={() =>
                   repayApprove.writeContractAsync({
-                    ...testUsdcContract,
+                    ...asset,
                     functionName: "approve",
-                    args: [anoraPoolContract.address, MAX_UINT256],
+                    args: [pool.address, MAX_UINT256],
                   })
                 }
               >
@@ -219,7 +226,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
                 disabled={!canRepay || repay.isPending || repay.isConfirming}
                 onClick={() =>
                   repay.writeContractAsync({
-                    ...anoraPoolContract,
+                    ...pool,
                     functionName: "repay",
                     args: [BigInt(id), repayAmountUnits],
                   })
@@ -233,6 +240,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
         {(repayApprove.error || repay.error) && (
           <p className="error">{describeContractError(repayApprove.error ?? repay.error)}</p>
         )}
+        <TxLink hash={repay.hash} />
 
         {facility.statusName === "Open" && (
           <div className="row">
@@ -240,7 +248,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
               className="btn"
               disabled={!canMarkLate || markLate.isPending || markLate.isConfirming}
               onClick={() =>
-                markLate.writeContractAsync({ ...anoraPoolContract, functionName: "markLate", args: [BigInt(id)] })
+                markLate.writeContractAsync({ ...pool, functionName: "markLate", args: [BigInt(id)] })
               }
             >
               {markLate.isPending || markLate.isConfirming ? "Marking..." : "Mark late"}
@@ -248,6 +256,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
           </div>
         )}
         {markLate.error && <p className="error">{describeContractError(markLate.error)}</p>}
+        <TxLink hash={markLate.hash} />
 
         {facility.statusName === "Late" && isRiskAgent && (
           <div className="form-block">
@@ -261,7 +270,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
               disabled={!canDeclareDefault || !reason || declareDefault.isPending || declareDefault.isConfirming}
               onClick={() =>
                 declareDefault.writeContractAsync({
-                  ...anoraPoolContract,
+                  ...pool,
                   functionName: "declareDefault",
                   args: [BigInt(id), reason],
                 })
@@ -272,6 +281,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
           </div>
         )}
         {declareDefault.error && <p className="error">{describeContractError(declareDefault.error)}</p>}
+        <TxLink hash={declareDefault.hash} />
 
         {facility.statusName === "Defaulted" && outstandingLoss > 0n && (
           <div className="row">
@@ -288,9 +298,9 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
                 disabled={recoveryApprove.isPending || recoveryApprove.isConfirming}
                 onClick={() =>
                   recoveryApprove.writeContractAsync({
-                    ...testUsdcContract,
+                    ...asset,
                     functionName: "approve",
-                    args: [anoraPoolContract.address, MAX_UINT256],
+                    args: [pool.address, MAX_UINT256],
                   })
                 }
               >
@@ -302,7 +312,7 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
                 disabled={!canRecover || recordRecovery.isPending || recordRecovery.isConfirming}
                 onClick={() =>
                   recordRecovery.writeContractAsync({
-                    ...anoraPoolContract,
+                    ...pool,
                     functionName: "recordRecovery",
                     args: [BigInt(id), recoveryAmountUnits],
                   })
@@ -316,12 +326,14 @@ export function FacilityCard({ id, board }: { id: number; board: PoolBoard | und
         {recoveryPreview && (
           <p className="muted">
             Preview: senior gets {formatUsdc(recoveryPreview.toSenior)}, junior gets{" "}
-            {formatUsdc(recoveryPreview.toJunior)}, originator gets {formatUsdc(recoveryPreview.toOriginator)}.
+            {formatUsdc(recoveryPreview.toJunior)}, originator gets {formatUsdc(recoveryPreview.toOriginator)}{" "}
+            {assetSymbol}.
           </p>
         )}
         {(recoveryApprove.error || recordRecovery.error) && (
           <p className="error">{describeContractError(recoveryApprove.error ?? recordRecovery.error)}</p>
         )}
+        <TxLink hash={recordRecovery.hash} />
       </div>
     </div>
   );

@@ -168,7 +168,7 @@ await waitForButton("Get test USDC (100,000)");
 await shot("minted");
 
 await setSelect(0, "Junior");
-await setInput('input[placeholder="Amount USDC"]', "10000");
+await setInput('input[placeholder="Amount TestUSDC"]', "10000");
 if (await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Approve" && !b.disabled))) {
   await clickButton("Approve");
   await waitForButton("Deposit");
@@ -178,7 +178,7 @@ await waitForText("10,000");
 await shot("junior-deposited");
 
 await setSelect(0, "Senior");
-await setInput('input[placeholder="Amount USDC"]', "20000");
+await setInput('input[placeholder="Amount TestUSDC"]', "20000");
 await clickButton("Deposit");
 await waitForText("20,000");
 await shot("senior-deposited");
