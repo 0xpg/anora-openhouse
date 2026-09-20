@@ -41,6 +41,11 @@ export const AnoraPoolAbi = [
             "name": "seniorFeeShareBps",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "depositCap",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -471,6 +476,11 @@ export const AnoraPoolAbi = [
         "name": "seniorFeeShareBps",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "depositCap",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -629,6 +639,19 @@ export const AnoraPoolAbi = [
         "name": "",
         "type": "uint8",
         "internalType": "enum AnoraPool.Status"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalCapital",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -936,6 +959,11 @@ export const AnoraPoolAbi = [
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "DepositCapExceeded",
+    "inputs": []
   },
   {
     "type": "error",
