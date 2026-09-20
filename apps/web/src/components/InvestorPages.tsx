@@ -58,7 +58,7 @@ function PortfolioChart({ range }: { range: string }) {
       });
       context.fillStyle = "#121720";
       context.font = '700 12px Inter, "Segoe UI", sans-serif';
-      context.fillText(values.at(-1)!.toLocaleString(), x(values.length - 1) - 48, y(values.at(-1)!) - 10);
+      context.fillText(values[values.length - 1].toLocaleString(), x(values.length - 1) - 48, y(values[values.length - 1]) - 10);
     };
     draw();
     const observer = new ResizeObserver(draw);
@@ -66,7 +66,7 @@ function PortfolioChart({ range }: { range: string }) {
     return () => observer.disconnect();
   }, [range]);
 
-  return <canvas ref={canvasRef} className="portfolio-chart" role="img" aria-label={`Portfolio value over ${range}: ${portfolioSeries[range].values.at(-1)!.toLocaleString()} USDC`} />;
+  return <canvas ref={canvasRef} className="portfolio-chart" role="img" aria-label={`Portfolio value over ${range}: ${portfolioSeries[range].values[portfolioSeries[range].values.length - 1].toLocaleString()} USDC`} />;
 }
 
 export function Opportunity({ onBack, onComplete }: { onBack: () => void; onComplete: () => void }) {
