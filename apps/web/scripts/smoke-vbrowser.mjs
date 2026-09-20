@@ -2,15 +2,26 @@ import { getWindow } from "/home/dims/.local/lib/vpsbrowser/browser.mjs";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrumSepolia } from "viem/chains";
+import { defineChain } from "viem";
+
+const robinhood = defineChain({
+  id: 4663,
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+});
 
 const url = process.env.SMOKE_URL ?? "https://openhouse.anora.finance/";
 const shotDir = process.env.SMOKE_SHOTS ?? "/home/dims/.cache/claude-work/smoke";
-const rpc = process.env.ARBITRUM_SEPOLIA_RPC;
+const chain = process.env.SMOKE_CHAIN === "robinhood" ? robinhood : arbitrumSepolia;
+const rpc = chain === robinhood ? robinhood.rpcUrls.default.http[0] : process.env.ARBITRUM_SEPOLIA_RPC;
+const unit = BigInt(process.env.SMOKE_UNIT ?? (chain === robinhood ? "1" : "1000"));
+const amount = (n) => (BigInt(n) * unit).toString();
 const account = privateKeyToAccount(process.env.DEPLOYER_PRIVATE_KEY);
 const transport = http(rpc);
-const publicClient = createPublicClient({ chain: arbitrumSepolia, transport });
-const walletClient = createWalletClient({ account, chain: arbitrumSepolia, transport });
-const chainIdHex = "0x" + arbitrumSepolia.id.toString(16);
+const publicClient = createPublicClient({ chain, transport });
+const walletClient = createWalletClient({ account, chain, transport });
+const chainIdHex = "0x" + chain.id.toString(16);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function walletRequest(method, params) {
@@ -145,6 +156,7 @@ async function pageText() {
   return page.evaluate(() => document.body.innerText);
 }
 
+const fmt = (n) => Number(amount(n)).toLocaleString("en-US");
 const tenorMinutes = Number(process.env.SMOKE_TENOR_MIN ?? "2");
 const graceMinutes = Number(process.env.SMOKE_GRACE_MIN ?? "1");
 
@@ -163,28 +175,30 @@ if (!alreadyConnected) await clickButton("Connect wallet");
 await waitForText(account.address.slice(0, 6));
 await shot("connected");
 
-await clickButton("Get test USDC (100,000)");
-await waitForButton("Get test USDC (100,000)");
-await shot("minted");
+if (await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Get test USDC (100,000)"))) {
+  await clickButton("Get test USDC (100,000)");
+  await waitForButton("Get test USDC (100,000)");
+}
+await shot("funded");
 
 await setSelect(0, "Junior");
-await setInput('input[placeholder="Amount USDC"]', "10000");
+await setInput('input[placeholder^="Amount"]', amount(10));
 if (await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Approve" && !b.disabled))) {
   await clickButton("Approve");
   await waitForButton("Deposit");
 }
 await clickButton("Deposit");
-await waitForText("10,000");
+await waitForText(fmt(10));
 await shot("junior-deposited");
 
 await setSelect(0, "Senior");
-await setInput('input[placeholder="Amount USDC"]', "20000");
+await setInput('input[placeholder^="Amount"]', amount(20));
 await clickButton("Deposit");
-await waitForText("20,000");
+await waitForText(fmt(20));
 await shot("senior-deposited");
 
-await setLabeledInput("Credit limit", "20000");
-await setLabeledInput("First-loss stake", "2000");
+await setLabeledInput("Credit limit", amount(20));
+await setLabeledInput("First-loss stake", amount(2));
 await setLabeledInput("Tenor", String(tenorMinutes));
 await setLabeledInput("Grace period", String(graceMinutes));
 const needsStakeApproval = await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Approve first-loss stake" && !b.disabled));
@@ -196,7 +210,7 @@ await clickButton("Open facility");
 await waitForText("#0");
 await shot("facility-opened");
 
-await setInput('input[placeholder="Drawdown amount"]', "15000");
+await setInput('input[placeholder="Drawdown amount"]', amount(15));
 await clickButton("Drawdown");
 await waitForButton("Mark late", { timeout: (tenorMinutes + 2) * 60_000 });
 await shot("drawn-and-past-due");
@@ -208,6 +222,7 @@ await shot("marked-late");
 await runDefaultAndRecovery();
 
 async function runDefaultAndRecovery() {
+await page.waitForSelector('textarea[placeholder="Default reason"]', { timeout: 120_000 });
 await setInput('textarea[placeholder="Default reason"]', "buyer failed to pay; restructuring refused");
 await waitForButton("Declare default", { timeout: (graceMinutes + 2) * 60_000 });
 await clickButton("Declare default");
@@ -218,14 +233,31 @@ const needsRecoveryApproval = await page.evaluate(() => {
   const btns = [...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Approve" && !b.disabled);
   return btns.length > 0;
 });
-await setInput('input[placeholder="Recovery amount"]', "9000");
+await setInput('input[placeholder="Recovery amount"]', amount(Number(process.env.SMOKE_RECOVERY ?? "15")));
 if (needsRecoveryApproval) {
   await clickButton("Approve");
   await waitForButton("Record recovery");
 }
 await clickButton("Record recovery");
-await sleep(8_000);
+await waitForText("Losses: first-loss 0", { timeout: 60_000 }).catch(() => {});
+await sleep(6_000);
 await shot("recovered");
+
+if (process.env.SMOKE_WITHDRAW !== "0") {
+  for (const tranche of ["Senior", "Junior"]) {
+    const shares = await page.evaluate((t) => {
+      const m = document.body.innerText.match(new RegExp(`${t} ([\\d,\\.]+)`));
+      return m ? m[1].replace(/,/g, "") : "0";
+    }, tranche);
+    if (shares === "0") continue;
+    await setSelect(1, tranche);
+    await setInput('input[placeholder^="Shares"]', shares);
+    await clickButton("Withdraw");
+    await waitForButton("Withdraw", { timeout: 90_000 }).catch(() => {});
+    await sleep(3_000);
+  }
+  await shot("withdrawn");
+}
 
 console.log("---- final page text ----");
 console.log(await pageText());

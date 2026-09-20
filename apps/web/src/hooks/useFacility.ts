@@ -1,7 +1,9 @@
-import { useReadContracts } from "wagmi";
-import { anoraPoolContract } from "../config/contracts";
+import { useChainId, useReadContracts } from "wagmi";
+import { poolContract } from "../config/contracts";
+import { usePoolAddress } from "./useDeployment";
 
 const REFETCH_MS = 5_000;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 export const FacilityStatus = ["Open", "Late", "Defaulted", "Closed"] as const;
 export type FacilityStatusName = (typeof FacilityStatus)[number];
@@ -27,17 +29,21 @@ export interface FacilityData {
 }
 
 export function useFacility(id: number) {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+
   const { data, isLoading, error } = useReadContracts({
     contracts: [
-      { ...anoraPoolContract, functionName: "facilities", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "owedOf", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "dueAtOf", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "lossesOf", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "defaultReasonOf", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "defaultedAtOf", args: [BigInt(id)] },
-      { ...anoraPoolContract, functionName: "lateSinceOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "facilities", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "owedOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "dueAtOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "lossesOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "defaultReasonOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "defaultedAtOf", args: [BigInt(id)] },
+      { ...pool, chainId, functionName: "lateSinceOf", args: [BigInt(id)] },
     ],
-    query: { refetchInterval: REFETCH_MS },
+    query: { enabled: !!poolAddress, refetchInterval: REFETCH_MS },
   });
 
   let facility: FacilityData | undefined;

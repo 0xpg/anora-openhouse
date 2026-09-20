@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useAccount } from "wagmi";
-import { anoraPoolContract, testUsdcContract } from "../config/contracts";
+import { assetContract, poolContract } from "../config/contracts";
+import { useDeployment } from "../hooks/useDeployment";
 import { describeContractError } from "../lib/errors";
 import { formatUsdc, parseUsdc } from "../lib/format";
 import { useContractAction } from "../hooks/useContractAction";
-import { usePolicy, useUsdcAllowance } from "../hooks/usePool";
+import { useAssetAllowance, usePolicy } from "../hooks/usePool";
+import { TxLink } from "./TxLink";
 
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 export function Originator() {
   const { address, isConnected } = useAccount();
+  const deployment = useDeployment();
   const { data: policy } = usePolicy();
-  const { data: allowance } = useUsdcAllowance(address);
+  const { data: allowance } = useAssetAllowance(address);
   const [limit, setLimit] = useState("");
   const [firstLoss, setFirstLoss] = useState("");
   const [tenorMinutes, setTenorMinutes] = useState("");
@@ -28,6 +31,12 @@ export function Originator() {
       </section>
     );
   }
+
+  if (!deployment?.pool) return null;
+
+  const assetSymbol = deployment.assetSymbol;
+  const asset = assetContract(deployment.asset);
+  const pool = poolContract(deployment.pool);
 
   const minFirstLossBps = policy ? (policy as readonly bigint[])[1] : undefined;
   const limitUnits = parseUsdc(limit);
@@ -46,11 +55,11 @@ export function Originator() {
       </p>
       <div className="form-grid">
         <label>
-          Credit limit (USDC)
+          Credit limit ({assetSymbol})
           <input type="text" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} />
         </label>
         <label>
-          First-loss stake (USDC)
+          First-loss stake ({assetSymbol})
           <input
             type="text"
             inputMode="decimal"
@@ -78,7 +87,9 @@ export function Originator() {
         </label>
       </div>
       {minFirstLossBps !== undefined && limitUnits > 0n && (
-        <p className="muted">Minimum first-loss required: {formatUsdc(minFirstLoss)} USDC</p>
+        <p className="muted">
+          Minimum first-loss required: {formatUsdc(minFirstLoss)} {assetSymbol}
+        </p>
       )}
       {needsApproval ? (
         <button
@@ -86,9 +97,9 @@ export function Originator() {
           disabled={approve.isPending || approve.isConfirming}
           onClick={() =>
             approve.writeContractAsync({
-              ...testUsdcContract,
+              ...asset,
               functionName: "approve",
-              args: [anoraPoolContract.address, MAX_UINT256],
+              args: [pool.address, MAX_UINT256],
             })
           }
         >
@@ -100,7 +111,7 @@ export function Originator() {
           disabled={!canOpen || open.isPending || open.isConfirming}
           onClick={() =>
             open.writeContractAsync({
-              ...anoraPoolContract,
+              ...pool,
               functionName: "openFacility",
               args: [
                 limitUnits,
@@ -117,6 +128,7 @@ export function Originator() {
       {(approve.error || open.error) && (
         <p className="error">{describeContractError(approve.error ?? open.error)}</p>
       )}
+      <TxLink hash={open.hash} />
     </section>
   );
 }

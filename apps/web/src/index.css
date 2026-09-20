@@ -26,7 +26,11 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .primary-nav button.active::after { position: absolute; right: 0; bottom: 0; left: 0; height: 4px; background: var(--accent); content: ""; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .network-pill, .account-pill, .connect-button { min-height: 42px; border-radius: 7px; }
-.network-pill { display: flex; align-items: center; gap: 10px; padding: 0 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); }
+.network-select { display: flex; gap: 4px; }
+.network-pill { display: flex; align-items: center; gap: 10px; padding: 0 15px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+.network-pill.active { color: var(--ink); background: var(--accent-soft); border-color: var(--accent-dark); }
+.asset-pill { padding: 4px 9px; color: var(--accent-ink); background: var(--accent-soft); border-radius: 5px; font-size: 11px; font-weight: 700; }
+.pool-link { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
 .connect-button { padding: 0 20px; color: #fff; background: var(--fill); border: 1px solid var(--fill); font-weight: 600; }
 .connect-button:hover, .primary-button:hover:not(:disabled) { background: #30343a; border-color: #30343a; }
 .account-pill { display: flex; align-items: center; gap: 9px; padding: 0 10px 0 14px; color: #fff; background: var(--fill); border: 1px solid var(--fill); border-radius: 7px; }
@@ -34,6 +38,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .account-menu { padding: 4px; color: #fff; background: transparent; border: 0; }
 .badge-risk { display: none; }
 .btn-warn { min-height: 42px; padding: 0 14px; color: var(--warning); background: var(--warning-soft); border: 1px solid #f0d9a8; border-radius: 7px; }
+.panel { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { min-height: 42px; padding: 0 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; }
 
 .main { width: min(1420px, calc(100% - 72px)); margin: 0 auto; padding: 32px 0 38px; }
 .markets-heading { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(680px, 1.42fr); gap: 48px; align-items: center; }

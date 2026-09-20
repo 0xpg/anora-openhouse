@@ -22,6 +22,7 @@ contract AnoraPool {
         uint256 financingFeeBps;
         uint256 lateFeePerDayBps;
         uint256 seniorFeeShareBps;
+        uint256 depositCap;
     }
 
     struct Facility {
@@ -56,6 +57,7 @@ contract AnoraPool {
     error GraceNotElapsed();
     error NothingToRecover();
     error InsufficientShares();
+    error DepositCapExceeded();
 
     uint256 public constant BPS = 10_000;
 
@@ -152,7 +154,12 @@ contract AnoraPool {
         return cap > seniorAssets ? cap - seniorAssets : 0;
     }
 
+    function totalCapital() public view returns (uint256) {
+        return seniorAssets + juniorAssets + firstLossReserve;
+    }
+
     function deposit(Tranche tranche, uint256 amount) external returns (uint256 shares) {
+        if (totalCapital() + amount > policy.depositCap) revert DepositCapExceeded();
         if (tranche == Tranche.Senior) {
             if (amount > seniorCapacity()) revert SeniorCapacityExceeded();
             shares = _toShares(amount, seniorAssets, seniorTotalShares);
@@ -193,6 +200,7 @@ contract AnoraPool {
         returns (uint256 id)
     {
         if (firstLoss < limit * policy.minFirstLossBps / BPS) revert FirstLossTooSmall();
+        if (totalCapital() + firstLoss > policy.depositCap) revert DepositCapExceeded();
         id = nextFacilityId++;
         Facility storage f = _facilities[id];
         f.originator = msg.sender;

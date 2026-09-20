@@ -26,6 +26,10 @@ export function parseUsdc(input: string): bigint {
   return BigInt(wholeDigits) * 10n ** BigInt(USDC_DECIMALS) + BigInt(paddedFraction || "0");
 }
 
+export function shortenAddress(address: string): string {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 export function formatDuration(seconds: number): string {
   if (seconds <= 0) return "0m";
   const days = Math.floor(seconds / 86400);

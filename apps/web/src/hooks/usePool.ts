@@ -1,5 +1,6 @@
-import { useReadContract, useReadContracts } from "wagmi";
-import { anoraPoolContract, testUsdcContract } from "../config/contracts";
+import { useChainId, useReadContract, useReadContracts } from "wagmi";
+import { assetContract, poolContract } from "../config/contracts";
+import { useAssetAddress, usePoolAddress } from "./useDeployment";
 
 const REFETCH_MS = 5_000;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
@@ -10,20 +11,27 @@ export interface PoolBoard {
   firstLossReserve: bigint;
   liquidity: bigint;
   seniorCapacity: bigint;
-  poolUsdcBalance: bigint;
+  poolAssetBalance: bigint;
 }
 
 export function usePoolBoard() {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const assetAddress = useAssetAddress();
+  const enabled = !!poolAddress && !!assetAddress;
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+  const asset = assetContract(assetAddress ?? ZERO_ADDRESS);
+
   const { data, isLoading, error } = useReadContracts({
     contracts: [
-      { ...anoraPoolContract, functionName: "seniorAssets" },
-      { ...anoraPoolContract, functionName: "juniorAssets" },
-      { ...anoraPoolContract, functionName: "firstLossReserve" },
-      { ...anoraPoolContract, functionName: "liquidity" },
-      { ...anoraPoolContract, functionName: "seniorCapacity" },
-      { ...testUsdcContract, functionName: "balanceOf", args: [anoraPoolContract.address] },
+      { ...pool, chainId, functionName: "seniorAssets" },
+      { ...pool, chainId, functionName: "juniorAssets" },
+      { ...pool, chainId, functionName: "firstLossReserve" },
+      { ...pool, chainId, functionName: "liquidity" },
+      { ...pool, chainId, functionName: "seniorCapacity" },
+      { ...asset, chainId, functionName: "balanceOf", args: [pool.address] },
     ],
-    query: { refetchInterval: REFETCH_MS },
+    query: { enabled, refetchInterval: REFETCH_MS },
   });
 
   const board: PoolBoard | undefined = data
@@ -33,7 +41,7 @@ export function usePoolBoard() {
         firstLossReserve: (data[2].result as bigint) ?? 0n,
         liquidity: (data[3].result as bigint) ?? 0n,
         seniorCapacity: (data[4].result as bigint) ?? 0n,
-        poolUsdcBalance: (data[5].result as bigint) ?? 0n,
+        poolAssetBalance: (data[5].result as bigint) ?? 0n,
       }
     : undefined;
 
@@ -41,18 +49,28 @@ export function usePoolBoard() {
 }
 
 export function usePolicy() {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+
   return useReadContract({
-    ...anoraPoolContract,
+    ...pool,
     functionName: "policy",
-    query: { refetchInterval: false, staleTime: Infinity },
+    chainId,
+    query: { enabled: !!poolAddress, refetchInterval: false, staleTime: Infinity },
   });
 }
 
 export function useRiskAgent() {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+
   return useReadContract({
-    ...anoraPoolContract,
+    ...pool,
     functionName: "riskAgent",
-    query: { refetchInterval: REFETCH_MS },
+    chainId,
+    query: { enabled: !!poolAddress, refetchInterval: REFETCH_MS },
   });
 }
 
@@ -63,22 +81,31 @@ export function useIsRiskAgent(address: `0x${string}` | undefined) {
 }
 
 export function useNextFacilityId() {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+
   return useReadContract({
-    ...anoraPoolContract,
+    ...pool,
     functionName: "nextFacilityId",
-    query: { refetchInterval: REFETCH_MS },
+    chainId,
+    query: { enabled: !!poolAddress, refetchInterval: REFETCH_MS },
   });
 }
 
 export function useMyShares(address: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const pool = poolContract(poolAddress ?? ZERO_ADDRESS);
+
   const { data } = useReadContracts({
     contracts: [
-      { ...anoraPoolContract, functionName: "seniorShares", args: [address ?? ZERO_ADDRESS] },
-      { ...anoraPoolContract, functionName: "juniorShares", args: [address ?? ZERO_ADDRESS] },
-      { ...anoraPoolContract, functionName: "seniorTotalShares" },
-      { ...anoraPoolContract, functionName: "juniorTotalShares" },
+      { ...pool, chainId, functionName: "seniorShares", args: [address ?? ZERO_ADDRESS] },
+      { ...pool, chainId, functionName: "juniorShares", args: [address ?? ZERO_ADDRESS] },
+      { ...pool, chainId, functionName: "seniorTotalShares" },
+      { ...pool, chainId, functionName: "juniorTotalShares" },
     ],
-    query: { enabled: !!address, refetchInterval: REFETCH_MS },
+    query: { enabled: !!poolAddress && !!address, refetchInterval: REFETCH_MS },
   });
 
   return {
@@ -89,20 +116,31 @@ export function useMyShares(address: `0x${string}` | undefined) {
   };
 }
 
-export function useUsdcBalance(address: `0x${string}` | undefined) {
+export function useAssetBalance(address: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const assetAddress = useAssetAddress();
+  const asset = assetContract(assetAddress ?? ZERO_ADDRESS);
+
   return useReadContract({
-    ...testUsdcContract,
+    ...asset,
     functionName: "balanceOf",
     args: [address ?? ZERO_ADDRESS],
-    query: { enabled: !!address, refetchInterval: REFETCH_MS },
+    chainId,
+    query: { enabled: !!assetAddress && !!address, refetchInterval: REFETCH_MS },
   });
 }
 
-export function useUsdcAllowance(owner: `0x${string}` | undefined) {
+export function useAssetAllowance(owner: `0x${string}` | undefined) {
+  const chainId = useChainId();
+  const poolAddress = usePoolAddress();
+  const assetAddress = useAssetAddress();
+  const asset = assetContract(assetAddress ?? ZERO_ADDRESS);
+
   return useReadContract({
-    ...testUsdcContract,
+    ...asset,
     functionName: "allowance",
-    args: [owner ?? ZERO_ADDRESS, anoraPoolContract.address],
-    query: { enabled: !!owner, refetchInterval: REFETCH_MS },
+    args: [owner ?? ZERO_ADDRESS, poolAddress ?? ZERO_ADDRESS],
+    chainId,
+    query: { enabled: !!assetAddress && !!poolAddress && !!owner, refetchInterval: REFETCH_MS },
   });
 }
