@@ -1,10 +1,15 @@
-import { arbitrumSepolia } from "wagmi/chains";
 import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { arbitrumSepolia } from "wagmi/chains";
+import { AddressLink } from "./AddressLink";
+import { robinhood } from "../config/wagmi";
+import { useDeployment } from "../hooks/useDeployment";
 import { useIsRiskAgent } from "../hooks/usePool";
+import { shortenAddress } from "../lib/format";
 
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
+const SELECTABLE_CHAINS = [
+  { id: arbitrumSepolia.id, name: "Arbitrum Sepolia" },
+  { id: robinhood.id, name: "Robinhood Chain" },
+];
 
 export function Header() {
   const { address, isConnected } = useAccount();
@@ -13,7 +18,8 @@ export function Header() {
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const isRiskAgent = useIsRiskAgent(address);
-  const wrongNetwork = isConnected && chainId !== arbitrumSepolia.id;
+  const deployment = useDeployment();
+  const isSupportedChain = SELECTABLE_CHAINS.some((chain) => chain.id === chainId);
 
   const injectedConnector = connectors.find((c) => c.type === "injected") ?? connectors[0];
 
@@ -24,14 +30,26 @@ export function Header() {
         <span className="brand-sub">Open House</span>
       </div>
       <div className="header-actions">
-        {wrongNetwork && (
-          <button
-            className="btn btn-warn"
-            disabled={isSwitching}
-            onClick={() => switchChain({ chainId: arbitrumSepolia.id })}
-          >
-            {isSwitching ? "Switching..." : "Switch to Arbitrum Sepolia"}
-          </button>
+        <div className="network-select">
+          {SELECTABLE_CHAINS.map((chain) => (
+            <button
+              key={chain.id}
+              className={chain.id === chainId ? "btn btn-network btn-network-active" : "btn btn-network"}
+              disabled={isSwitching || !isConnected}
+              onClick={() => switchChain({ chainId: chain.id })}
+            >
+              {chain.name}
+            </button>
+          ))}
+        </div>
+        {isConnected && !isSupportedChain && <span className="btn btn-warn">Unsupported network</span>}
+        {deployment && (
+          <>
+            <span className="asset-pill">{deployment.assetSymbol}</span>
+            {deployment.pool && (
+              <AddressLink className="pool-link" address={deployment.pool} />
+            )}
+          </>
         )}
         {isConnected && address ? (
           <div className="account-pill">
