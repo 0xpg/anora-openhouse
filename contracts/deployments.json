@@ -17,6 +17,9 @@
     "asset": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
     "assetSymbol": "USDG",
     "faucet": false,
-    "AnoraPool": null
+    "AnoraPool": "0xe092c9607d81D38FB392208D9bc9b6075e0199d2",
+    "deployedAt": "2026-09-20",
+    "initialRiskAgent": "0x07dF8cd6D20b71ba7F16309d2844B88d1043fFfB",
+    "depositCap": "1000000000"
   }
 }

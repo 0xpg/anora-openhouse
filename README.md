@@ -10,6 +10,11 @@ first, and recoveries flow back through the waterfall, Senior first.
 Built for the Arbitrum Open House Singapore 2026 buildathon. Target chain:
 Arbitrum Sepolia.
 
+| Contract | Robinhood Chain (mainnet, USDG) |
+|---|---|
+| AnoraPool | [`0xe092c9607d81D38FB392208D9bc9b6075e0199d2`](https://robinhoodchain.blockscout.com/address/0xe092c9607d81D38FB392208D9bc9b6075e0199d2) |
+| USDG | [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/address/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) |
+
 | Contract | Arbitrum Sepolia |
 |---|---|
 | AnoraPool | [`0x45FD61Fe12E13C5f722F10178aED4067224f2e20`](https://sepolia.arbiscan.io/address/0x45FD61Fe12E13C5f722F10178aED4067224f2e20) |
