@@ -26,7 +26,8 @@ contract AnoraPoolTest is Test {
                 minFirstLossBps: 1_000,
                 financingFeeBps: 200,
                 lateFeePerDayBps: 10,
-                seniorFeeShareBps: 6_000
+                seniorFeeShareBps: 6_000,
+                depositCap: 1_000_000 * USDC
             })
         );
         _fund(senior1, 1_000_000 * USDC);
@@ -368,5 +369,38 @@ contract AnoraPoolTest is Test {
         vm.prank(next);
         pool.declareDefault(id, "by new agent");
         assertEq(uint8(pool.statusOf(id)), uint8(AnoraPool.Status.Defaulted));
+    }
+
+    function test_depositCapCountsTranchesAndFirstLoss() public {
+        AnoraPool capped = new AnoraPool(
+            address(usdc),
+            riskAgent,
+            AnoraPool.Policy({
+                seniorPerJuniorBps: 22_500,
+                minFirstLossBps: 1_000,
+                financingFeeBps: 200,
+                lateFeePerDayBps: 10,
+                seniorFeeShareBps: 6_000,
+                depositCap: 1_000 * USDC
+            })
+        );
+        vm.prank(junior1);
+        usdc.approve(address(capped), type(uint256).max);
+        vm.prank(originator);
+        usdc.approve(address(capped), type(uint256).max);
+
+        vm.prank(junior1);
+        capped.deposit(AnoraPool.Tranche.Junior, 900 * USDC);
+
+        vm.prank(originator);
+        vm.expectRevert(AnoraPool.DepositCapExceeded.selector);
+        capped.openFacility(1_010 * USDC, 101 * USDC, 90 days, 30 days);
+
+        vm.prank(originator);
+        capped.openFacility(1_000 * USDC, 100 * USDC, 90 days, 30 days);
+
+        vm.prank(junior1);
+        vm.expectRevert(AnoraPool.DepositCapExceeded.selector);
+        capped.deposit(AnoraPool.Tranche.Junior, 1 * USDC);
     }
 }

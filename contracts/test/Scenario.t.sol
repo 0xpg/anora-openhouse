@@ -26,7 +26,8 @@ contract ScenarioTest is Test {
                 minFirstLossBps: 1_000,
                 financingFeeBps: 200,
                 lateFeePerDayBps: 10,
-                seniorFeeShareBps: 6_000
+                seniorFeeShareBps: 6_000,
+                depositCap: 10_000_000 * USDC
             })
         );
         address[3] memory who = [seniorLender, juniorLender, originator];
