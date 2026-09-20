@@ -20,3 +20,13 @@ bun run dev:web
 - Commits: short, English, conventional style (`feat(web): ...`, `fix: ...`, `chore: ...`). One cluster per commit.
 - Contract changes need a redeploy: `forge script script/Deploy.s.sol --rpc-url $ARBITRUM_SEPOLIA_RPC --private-key $DEPLOYER_PRIVATE_KEY --broadcast`, then update `deployments.json`, `contracts.ts`, README, and re-export ABIs.
 - Web deploy to https://openhouse.anora.finance is done from the VPS with `bin/deploy-web.sh` (ask Dimas).
+
+## Verifying on Robinhood Chain Blockscout
+
+`forge verify-contract --verifier blockscout` is blocked by Cloudflare from the VPS. Use the browser-backed script instead (needs the VPS Chrome, run from `apps/web` so `viem` resolves):
+
+```
+cd apps/web && node ../../scripts/verify-blockscout.mjs <address> src/AnoraPool.sol:AnoraPool
+```
+
+It generates the standard JSON input with forge, posts it to Blockscout's `/api/v2/.../verification/via/standard-input` from inside the browser session, and polls until `is_verified`. Constructor args are auto-detected. Sourcify still works headless: `forge verify-contract --verifier sourcify --chain-id 4663 ...`.
